@@ -1,0 +1,102 @@
+# This config is used for local integration testing without real databases.
+# It uses a special 'values' connector type.
+sources:
+  - alias: user
+    connector: values
+    collection: in_memory_user_data
+    keyField: _id
+  - alias: sales
+    connector: values
+    collection: in_memory_sales_data
+    keyField: _id
+  - alias: promo
+    connector: values
+    collection: in_memory_promo_data
+    keyField: promo_code
+
+joins:
+  - left: user
+    right: sales
+    condition: user.id = sales.userId
+    type: left
+  - left: sales
+    right: promo
+    condition: sales.promo_code = promo.promo_code AND sales.sale_date BETWEEN promo.start_date AND promo.end_date
+    type: left
+
+target:
+  table: test_output
+  partitionedBy:
+    - processing_date
+
+schema:
+  - name: "id"
+    sourceField: "_id.$oid"
+    sourceAlias: "user"
+    type: "STRING"
+
+  - name: "userId"
+    sourceField: "userId"
+    sourceAlias: "sales"
+    type: "STRING"
+
+  - name: "username"
+    sourceField: "username"
+    sourceAlias: "user"
+    type: "STRING"
+
+  - name: "totalSpent"
+    sourceField: "totalSpent.$numberDecimal"
+    sourceAlias: "sales"
+    type: "DECIMAL(10, 2)"
+
+  - name: "sale_date"
+    sourceField: "sale_date.$date"
+    sourceAlias: "sales"
+    type: "TIMESTAMP_LTZ(3)"
+    "rules": ["toTimestampLtz"]
+
+  - name: "promo_code"
+    sourceField: "promo_code"
+    sourceAlias: "sales"
+    type: "STRING"
+
+  - name: "campaign_name"
+    sourceField: "campaign_name"
+    sourceAlias: "promo"
+    type: "STRING"
+    defaultValue: "N/A"
+
+  - name: "start_date"
+    sourceField: "start_date.$date"
+    sourceAlias: "promo"
+    type: "TIMESTAMP_LTZ(3)"
+    "rules": ["toTimestampLtz"]
+
+  - name: "end_date"
+    sourceField: "end_date.$date"
+    sourceAlias: "promo"
+    type: "TIMESTAMP_LTZ(3)"
+    "rules": ["toTimestampLtz"]
+
+  - name: "processing_date"
+    sourceField: "DATE '2025-07-06'"
+    sourceAlias: null
+    type: "DATE"
+
+  - name: "promo_code"
+    sourceField: "promo_code"
+    sourceAlias: "promo"
+    type: "STRING"
+
+typeRules:
+  STRING: []
+  DECIMAL(10, 2):
+    - "CAST(${field} AS DECIMAL(10,2))"
+  TIMESTAMP_LTZ(3):
+    - "TO_TIMESTAMP_LTZ(${field}, 3)"
+  DATE:
+    - "CAST(${field} AS DATE)"
+
+ruleTemplates:
+  JsonFieldExtractorUdf: "JsonFieldExtractorUdf(${field}, ${param1})"

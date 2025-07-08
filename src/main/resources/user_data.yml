@@ -1,0 +1,158 @@
+sources:
+  - alias: user
+    connector: mongodb-cdc
+    collection: complex_user_data
+    keyField: _id
+  - alias: sales
+    connector: mongodb-cdc
+    collection: complex_sales_data
+    keyField: userId
+
+joins:
+  - left: user
+    right: sales
+    condition: id = userId
+    type: left
+
+target:
+  table: user_flat
+  partitionedBy:
+    - processing_date
+
+schema:
+  - name: id
+    sourceAlias: user
+    sourceField: "_id.$oid"
+    type: STRING
+
+  - name: userId
+    sourceAlias: sales
+    sourceField: "userId"
+    type: STRING
+
+  - name: username
+    sourceAlias: user
+    sourceField: "username"
+    type: STRING
+
+  - name: age
+    sourceAlias: user
+    sourceField: "age.$numberInt"
+    type: INT
+
+  - name: balance
+    sourceAlias: user
+    sourceField: "balance.$numberDouble"
+    type: DOUBLE
+    rules: ["safeCastDouble", "roundTwoDecimals"]
+
+  - name: isActive
+    sourceAlias: user
+    sourceField: "isActive"
+    type: BOOLEAN
+
+  - name: signupDate
+    sourceAlias: user
+    sourceField: "signupDate.$date"
+    type: TIMESTAMP_LTZ(3)
+    "rules": ["toTimestampLtz"]
+
+  - name: lastLogin
+    sourceAlias: user
+    sourceField: "lastLogin.$timestamp.t"
+    type: BIGINT
+
+  - name: languages
+    sourceAlias: user
+    sourceField: "preferences.languages"
+    type: ARRAY<STRING>
+
+  - name: roles
+    sourceAlias: user
+    sourceField: "roles"
+    type: ARRAY<ROW<type STRING, level INT>>
+
+  - name: address
+    sourceAlias: user
+    sourceField: "address"
+    type: ROW<street STRING, city STRING, zip BIGINT>
+
+  - name: coordinates
+    sourceAlias: user
+    sourceField: "address.location.coordinates"
+    type: ARRAY<DOUBLE>
+
+  - name: profilePicture
+    sourceAlias: user
+    sourceField: "profilePicture.$binary.base64"
+    type: BYTES
+    rules: ["base64decode"]
+
+  - name: score
+    sourceAlias: user
+    sourceField: "score.$numberDecimal"
+    type: DECIMAL(10,2)
+
+  - name: createdBy
+    sourceAlias: user
+    sourceField: "meta.createdBy.$oid"
+    type: STRING
+
+  - name: createdAt
+    sourceAlias: user
+    sourceField: "meta.createdAt.$date"
+    type: TIMESTAMP_LTZ(3)
+    "rules": ["toTimestampLtz"]
+
+  - name: updatedAt
+    sourceAlias: user
+    sourceField: "meta.updatedAt.$date"
+    type: TIMESTAMP_LTZ(3)
+    "rules": ["toTimestampLtz"]
+
+  - name: tags
+    sourceAlias: user
+    sourceField: "tags"
+    type: ARRAY<STRING>
+
+  - name: actionHistories
+    sourceAlias: user
+    sourceField: "history"
+    type: ARRAY<ROW<action STRING, timestamp TIMESTAMP_LTZ(3), amount DECIMAL(10,2)>>
+
+  - name: totalSpent
+    sourceAlias: sales
+    sourceField: "totalSpent.$numberDecimal"
+    type: DECIMAL(10,2)
+
+  - name: processing_date
+    sourceField: CURRENT_DATE
+    type: DATE
+    rules:
+      - "CURRENT_DATE"
+
+typeRules:
+  DOUBLE:
+    - "CAST(${field} AS DOUBLE)"
+    - "ROUND(${field}, 2)"
+  INT:
+    - "CAST(${field} AS INT)"
+  BIGINT:
+    - "CAST(${field} AS BIGINT)"
+  DECIMAL(10,2):
+    - "CAST(${field} AS DECIMAL(10,2))"
+  TIMESTAMP_LTZ(3):
+    - "TO_TIMESTAMP_LTZ(${field}, 3)"
+  BYTES:
+    - "FROM_BASE64(${field})"
+  ARRAY<STRING>:
+    - "ARRAY_DISTINCT(${field})"
+    - "ARRAY_SORT(${field})"
+
+ruleTemplates:
+  uuidify: "REPLACE(${field}, '-', '')"
+  safeCastDouble: "CAST(${field} AS DOUBLE)"
+  roundTwoDecimals: "ROUND(${field}, 2)"
+  base64decode: "FROM_BASE64(${field})"
+  JsonFieldExtractorUdf: "JsonFieldExtractorUdf(${field}, ${param1})"
+  CustomConcatUdf: "CustomConcatUdf(${field}, ${param1})"
